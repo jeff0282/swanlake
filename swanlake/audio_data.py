@@ -105,37 +105,44 @@ class BaseAudioData:
         self._move_fileobj_cursor(frame_offset, self._FILEOBJ_SEEK_ABSOLUTE)
 
 
-    def read(self, frames: int, direction: bool = True) -> Type[np.array]:
+    def read(self, frames: int) -> Type[np.array]:
         """
-        Read a number of frames from the current position, fowards or backwards. 
+        Read a number of frames from the current position to the right. 
         
         Length of return array will be less than requested frames if insufficient frames to fill.
-        Does NOT increment position
-
-        Params:
-        - `frames: int`: The number of frames to read
-        - [OPTIONAL] `direction: bool`: True to read forwards, False to read backwards
         """
 
         # get chunk of data and transform into numpy array
-        data = self._get_chunk_from_infront(frames) if direction else self._get_chunk_from_behind(frames)
-        data = pydub.AudioSegment.from_raw(data, 
-                                           sample_width=self.samplewidth, 
-                                           frame_rate=self.framerate, 
-                                           channels = self.channels
-                                           ).get_array_of_samples()
-        view_step = 1 if direction else -1
+        return self._create_frame_array(self._get_chunk_from_infront(frames))
+        
 
-        # create output array
-        output = np.ndarray(shape=(len(data), self.channels), dtype=self.datatype)
 
-        # put data into output array (direction important for reverse reading)
-        output[:] = data[::view_step]
+    def read_left(self, frames: int) -> Type[np.array]:
+        """
+        Read a number of frames from the current position from the left of the current position
+
+        Does NOT read in reverse, simply just returns the chunk before the current position 
+        """
+
+        return self._create_frame_array(self._get_chunk_from_behind(frames))
 
 
     #
     # Low-Level Methods
     #
+    def _create_frame_array(self, byte_data: bytes) -> Type[np.array]:
+        """
+        Create a dimensional array from the given byte data in shape (<length>, channels)
+        """
+        
+        # create a dimensional array with the given byte data,
+        # use known data about audio to form correctly
+        return np.ndarray(shape     = (len(byte_data // self.framesize), self.channels), 
+                          channels  = self.channels, 
+                          dtype     = self.datatype,
+                          buffer    = byte_data)
+    
+
     def _get_chunk_from_infront(self, chunk_size: int) -> bytes:
         """
         Get a chunk of bytes from audio data, reading from infront of current position
